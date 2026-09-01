@@ -54,44 +54,59 @@ async function runSpeedtest() {
         const avgPing = (totalPing / pingsCount).toFixed(0);
         document.getElementById('ping').innerText = `${avgPing} ms`;
 
-        status.innerText = "Testing download speed...";
+        status.innerText = "Testing download speed (3s)...";
+        const dController = new AbortController();
+        const dTimeoutId = setTimeout(() => dController.abort(), 3000);
+        
         const dStart = performance.now();
         const dResponse = await fetch(downloadFileUrl + "?nocache=" + Date.now(), { 
             cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+            signal: dController.signal
         });
-
         
-        if (!dResponse.ok) throw new Error('File download.bin not found on the server!');
+        if (!dResponse.ok) throw new Error('File download.bin not found!');
         
         const reader = dResponse.body.getReader();
         let downloadedBytes = 0;
         
-        while(true) {
-            const {done, value} = await reader.read();
-            if (done) break;
-            downloadedBytes += value.length;
+        try {
+            while(true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                downloadedBytes += value.length;
+            }
+            clearTimeout(dTimeoutId);
+        } catch(e) {
+            if (e.name !== 'AbortError') throw e;
         }
         
         const dDuration = (performance.now() - dStart) / 1000;
         const dSpeed = ((downloadedBytes * 8) / 1024 / 1024 / dDuration).toFixed(2);
         document.getElementById('download').innerText = `${dSpeed} Mbps`;
 
-        status.innerText = "Testing upload speed...";
-        const uploadSizeMb = 8; 
-        const uploadData = new Uint8Array(uploadSizeMb * 1024 * 1024); 
+        status.innerText = "Testing upload speed (3s)...";
+        
+        const chunkSizeChars = 200 * 1024;
+        const dummyData = "A".repeat(chunkSizeChars);
+        let uploadedBytes = 0;
         
         const uStart = performance.now();
-        try {
-            await fetch(currentDomain + "?upload=" + Date.now(), {
-                method: 'POST',
-                body: uploadData,
-                cache: 'no-store'
-            });
-        } catch(e) {}
+        const uEndTime = uStart + 3000;
+
+        while (performance.now() < uEndTime) {
+            try {
+                await fetch(currentDomain + "?upload=" + Date.now() + "&data=" + dummyData, {
+                    method: 'GET',
+                    cache: 'no-store'
+                });
+                uploadedBytes += chunkSizeChars; 
+            } catch(e) {
+                break; 
+            }
+        }
         
         const uDuration = (performance.now() - uStart) / 1000;
-        const uSpeed = ((uploadData.length * 8) / 1024 / 1024 / uDuration).toFixed(2);
+        const uSpeed = ((uploadedBytes * 8) / 1024 / 1024 / uDuration).toFixed(2);
         document.getElementById('upload').innerText = `${uSpeed} Mbps`;
         
         status.innerText = "Test completed!";
