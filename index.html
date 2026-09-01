@@ -56,7 +56,11 @@ async function runSpeedtest() {
 
         status.innerText = "Testing download speed...";
         const dStart = performance.now();
-        const dResponse = await fetch(downloadFileUrl + "?nocache=" + Date.now(), { cache: 'no-store' });
+        const dResponse = await fetch(downloadFileUrl + "?nocache=" + Date.now(), { 
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+
         
         if (!dResponse.ok) throw new Error('File download.bin not found on the server!');
         
