@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StaticSpeedTest</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; text-align: center; padding-top: 50px; }
+        .container { max-width: 450px; margin: 0 auto; background: #1e1e1e; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        button { background: #00ff66; color: #000; border: none; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 25px; cursor: pointer; transition: 0.2s; margin-top: 20px; }
+        button:hover { background: #00cc52; }
+        button:disabled { background: #555; color: #aaa; cursor: not-allowed; }
+        .metric { font-size: 20px; margin: 15px 0; font-weight: bold; text-align: left; padding-left: 20px; }
+        .value { color: #00ff66; float: right; padding-right: 20px; }
+        #status { font-style: italic; color: #aaa; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>StaticSpeedTest</h2>
+    <div id="status">Ready</div>
+    
+    <div class="metric">Ping: <span class="value" id="ping">- ms</span></div>
+    <div class="metric">Download: <span class="value" id="download">- Mbps</span></div>
+    <div class="metric">Upload: <span class="value" id="upload">- Mbps</span></div>
+    
+    <button id="start-btn" onclick="runSpeedtest()">Start Test</button>
+</div>
+
+<script>
+const currentDomain = window.location.origin + window.location.pathname;
+const downloadFileUrl = currentDomain + 'download.bin';
+
+async function runSpeedtest() {
+    const btn = document.getElementById('start-btn');
+    const status = document.getElementById('status');
+    btn.disabled = true;
+    
+    document.getElementById('ping').innerText = "- ms";
+    document.getElementById('download').innerText = "- Mbps";
+    document.getElementById('upload').innerText = "- Mbps";
+
+    try {
+        status.innerText = "Measuring ping...";
+        let totalPing = 0;
+        const pingsCount = 4;
+        
+        for (let i = 0; i < pingsCount; i++) {
+            const pStart = performance.now();
+            await fetch(currentDomain + "?ping=" + Date.now(), { method: 'HEAD', cache: 'no-store' });
+            totalPing += (performance.now() - pStart);
+        }
+        const avgPing = (totalPing / pingsCount).toFixed(0);
+        document.getElementById('ping').innerText = `${avgPing} ms`;
+
+        status.innerText = "Testing download speed...";
+        const dStart = performance.now();
+        const dResponse = await fetch(downloadFileUrl + "?nocache=" + Date.now(), { cache: 'no-store' });
+        
+        if (!dResponse.ok) throw new Error('File download.bin not found on the server!');
+        
+        const reader = dResponse.body.getReader();
+        let downloadedBytes = 0;
+        
+        while(true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            downloadedBytes += value.length;
+        }
+        
+        const dDuration = (performance.now() - dStart) / 1000;
+        const dSpeed = ((downloadedBytes * 8) / 1024 / 1024 / dDuration).toFixed(2);
+        document.getElementById('download').innerText = `${dSpeed} Mbps`;
+
+        status.innerText = "Testing upload speed...";
+        const uploadSizeMb = 8; 
+        const uploadData = new Uint8Array(uploadSizeMb * 1024 * 1024); 
+        
+        const uStart = performance.now();
+        try {
+            await fetch(currentDomain + "?upload=" + Date.now(), {
+                method: 'POST',
+                body: uploadData,
+                cache: 'no-store'
+            });
+        } catch(e) {}
+        
+        const uDuration = (performance.now() - uStart) / 1000;
+        const uSpeed = ((uploadData.length * 8) / 1024 / 1024 / uDuration).toFixed(2);
+        document.getElementById('upload').innerText = `${uSpeed} Mbps`;
+        
+        status.innerText = "Test completed!";
+    } catch (error) {
+        status.innerText = "An error occurred during the test";
+        alert(error.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+
+</body>
+</html>
