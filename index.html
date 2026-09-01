@@ -55,29 +55,31 @@ async function runSpeedtest() {
         document.getElementById('ping').innerText = `${avgPing} ms`;
 
         status.innerText = "Testing download speed (3s)...";
-        const dController = new AbortController();
-        const dTimeoutId = setTimeout(() => dController.abort(), 3000);
-        
-        const dStart = performance.now();
-        const dResponse = await fetch(downloadFileUrl + "?nocache=" + Date.now(), { 
-            cache: 'no-store',
-            signal: dController.signal
-        });
-        
-        if (!dResponse.ok) throw new Error('File download.bin not found!');
-        
-        const reader = dResponse.body.getReader();
         let downloadedBytes = 0;
-        
-        try {
-            while(true) {
-                const {done, value} = await reader.read();
-                if (done) break;
-                downloadedBytes += value.length;
+        const dStart = performance.now();
+        const dEndTime = dStart + 3000;
+
+        while (performance.now() < dEndTime) {
+            try {
+                const startByte = Math.floor(Math.random() * 1000000);
+                const endByte = startByte + (500 * 1024); 
+                
+                const dResponse = await fetch(downloadFileUrl + "?nocache=" + Date.now() + Math.random(), { 
+                    cache: 'no-store',
+                    headers: {
+                        'Range': `bytes=${startByte}-${endByte}`,
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                
+                if (dResponse.status === 206 || dResponse.ok) {
+                    const blob = await dResponse.blob();
+                    downloadedBytes += blob.size;
+                }
+            } catch(e) {
+                break;
             }
-            clearTimeout(dTimeoutId);
-        } catch(e) {
-            if (e.name !== 'AbortError') throw e;
         }
         
         const dDuration = (performance.now() - dStart) / 1000;
@@ -85,7 +87,6 @@ async function runSpeedtest() {
         document.getElementById('download').innerText = `${dSpeed} Mbps`;
 
         status.innerText = "Testing upload speed (3s)...";
-        
         const chunkSizeChars = 200 * 1024;
         const dummyData = "A".repeat(chunkSizeChars);
         let uploadedBytes = 0;
